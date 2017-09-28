@@ -1,0 +1,110 @@
+#! /bin/bash --posix
+
+#-------------------------------
+# “Yocto” Project Prerequisite
+#
+if [ "$first_time"="true" ]; then
+	sudo apt-get update
+	sudo apt-get upgrade
+	echo no | sudo dpkg-reconfigure dash
+	sudo apt-get install default-jdk default-jre libcups2 libjpeg8 git gawk \
+		wget g++ chrpath diffstat make texinfo lib32ncurses5 lib32z1
+fi
+
+#-------------------------------
+# configure http-proxy
+if [ "$use_proxy"="true" ]; then
+	export http_proxy=http://F1333523:2hsB6CG@10.191.131.2:3128
+	export https_proxy=http://F1333523:2hsB6CG@10.191.131.2:3128
+	git config --global http.proxy=http://F1333523:2hsB6CG@10.191.131.2:3128
+fi
+
+#-------------------------------
+# "Angstrom" distribution = "Yocto" Project + "OpenEmbedded" Project
+# "Altera linux-socfpga"  = "Angstrom" + "meta-altera" + "meta-altera-refdes"
+#
+
+#---- get the public 'repo' script
+wget http://commondatastorage.googleapis.com/git-repo-downloads/repo
+chmod 777 repo
+	# if your python later 3.x using “python -V”
+#sed -i "s%/usr/bin/env python$%/usr/bin/env python2%" repo
+if [ "$use_proxy"="true" ]; then
+	sed -i 's/git:/http:/g' repo
+fi
+mv repo repo1
+
+#---- get the public 'git-repo' project
+#---- then get the 'manifests' for 'angstrom'
+if [ "$use_proxy"="true" ]; then
+	#wget https://gerrit.googlesource.com/git-repo/clone.bundle
+	#./repo1 init -u https://github.com/Angstrom-distribution/angstrom-manifest \
+	#   	-b angstrom-v2015.12-yocto2.0 \
+	#   	--repo-url clone.bundle
+	cp -r jacky-patch/repo/repo .repo/
+	./repo1 init -u https://github.com/Angstrom-distribution/angstrom-manifest \
+	   	-b angstrom-v2015.12-yocto2.0
+else
+	./repo1 init -u git://github.com/Angstrom-distribution/angstrom-manifest \
+		-b angstrom-v2015.12-yocto2.0
+fi
+
+if [ "$use_proxy"="true" ]; then
+		#replace “git:” into “http:” or “https:” in ".repo/manifests/default.xml"
+	#sed -i 's/git:/http:/g' .repo/manifests/default.xml
+		#change the revision for "meta-altera" into "jethro"
+	#sed -i '/meta-altera/d' .repo/manifests/default.xml
+	#echo '<project name="kraj/meta-altera" path="sources/meta-altera" remote="github" revision="jethro"/>' >> .repo/manifests/default.xml
+	cp jacky-patch/repo/manifests/default.xml .repo/manifests/default.xml
+
+		#replace “git:” into “http:” or “https:” in "altera.xml"
+	#wget http://releases.rocketboards.org/release/2017.05/gsrd/src/altera.xml
+	#mkdir -p .repo/local_manifests
+	#sed -i 's/git:/http:/g' altera.xml
+	#mv altera.xml .repo/local_manifests/
+	cp -r jacky-patch/repo/local_manifests .repo/
+fi
+
+./repo1 sync # sync the local projects with the remote projects
+
+# 'MACHINE' means the target family, options are "cyclone5, arria5, arria10"
+MACHINE=arria10 . ./setup-environment
+
+# add the 'meta-altera-refdes' layer to 'conf/bblayers.conf' after every 'repo sync'
+#sed -i '/meta-altera/a \ \ ${TOPDIR}\/sources\/meta-altera-refdes \\' conf/bblayers.conf
+# if 
+	#---- remove a few layers that will cause issues and in fact we don’t need them
+	#sed -i '/meta-photography/d' conf/bblayers.conf
+	#sed -i '/meta-atmel/d' conf/bblayers.conf
+	#sed -i '/meta-uav/d' conf/bblayers.conf
+# else
+	#---- replace “;protocol=git” with ”;protocol=http”
+	#sed -i "s/;protocol=git/;protocol=http/g" `grep -rl ";protocol=git" sources`
+	#---- add “;protocol=https”
+	#sed -i 's/;branch=/;protocol=http;branch=/g' sources/meta-atmel/recipes-bsp/u-boot/u-boot-at91_git.bb
+	#sed -i 's/;branch=/;protocol=http;branch=/g' sources/meta-beagleboard/common-bsp/recipes-kernel/dtc/dtc_git.bbappend
+# fi
+cp jacky-patch/conf/bblayers.conf conf
+
+#---- check the newer release tags then replace the following per your choice
+export KERNEL_PROVIDER=linux-altera-ltsi
+export KERNEL_TAG=refs/tags/ACDS17.0_REL_GSRD_PR
+#export UBOOT_BRANCH=socfpga_v2013.01.01 # Please add virtual/bootloader (for Cyclone5 and Arria5)
+export UBOOT_TAG=refs/tags/ACDS17.0_REL_GSRD_PR
+export KBRANCH=socfpga-4.1.33-ltsi
+BB_ENV_EXTRAWHITE="$BB_ENV_EXTRAWHITE KBRANCH KERNEL_TAG UBOOT_TAG KERNEL_PROVIDER"
+
+#---- build/cleanup one project/layer
+#bitbake -b foo_1.0.bb
+#bitbake -b foo_1.0.bb -c clean
+
+#---- build/cleanup one image
+#bitbake console-image			# building standard Angstrom filesystem
+#bitbake gsrd-console-image		# building Altera older releases without X Frame-Buffer
+#bitbake pcie-console-image		# building Altera release with PCIe applications
+#bitbake console-image-minimal	# building Altera release for NAND/QSPI boot
+bitbake xvfb-console-image		# building Altera GSRD releases with X Frame-Buffer
+#bitbake xvfb-console-image -c clean
+
+#---- find images built out
+ls -l deploy/glibc/images
