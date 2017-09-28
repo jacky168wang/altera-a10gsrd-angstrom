@@ -30,7 +30,7 @@ chmod 777 repo
 	# if your python later 3.x using “python -V”
 #sed -i "s%/usr/bin/env python$%/usr/bin/env python2%" repo
 if [ "$use_proxy"="true" ]; then
-	sed -i 's/git:/http:/g' repo
+	sed -i 's/git:\/\//http:\/\//g' repo
 fi
 mv repo repo1
 
@@ -41,7 +41,7 @@ if [ "$use_proxy"="true" ]; then
 	#./repo1 init -u https://github.com/Angstrom-distribution/angstrom-manifest \
 	#   	-b angstrom-v2015.12-yocto2.0 \
 	#   	--repo-url clone.bundle
-	cp -r jacky-patch/repo/repo .repo/
+	cp -r jacky-patch/repo .repo
 	./repo1 init -u https://github.com/Angstrom-distribution/angstrom-manifest \
 	   	-b angstrom-v2015.12-yocto2.0
 else
